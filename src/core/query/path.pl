@@ -253,4 +253,35 @@ test(n_m_loop, [
     % test that we aren't going in circles
     length(Bindings, 4).
 
+
+test(plus, [
+         setup((setup_temp_store(State),
+                create_db_without_schema("admin", "test"))),
+         cleanup(teardown_temp_store(State)),
+         blocked('plus is not yet finished')
+     ]) :-
+
+    Commit_Info = commit_info{ author : "automated test framework",
+                               message : "testing"},
+
+    AST = (insert(a,e,t),
+           insert(a,b,c),
+           insert(c,b,e),
+           insert(e,b,g),
+           insert(g,b,a)),
+
+    resolve_absolute_string_descriptor("admin/test", Descriptor),
+    create_context(Descriptor,Commit_Info, Context),
+    query_response:run_context_ast_jsonld_response(Context, AST, _),
+
+    AST2 = (   t(a, e, v(x))
+           ;   path(a, plus(p(b)), v(x), v(p))),
+
+    create_context(Descriptor,Commit_Info, Context2),
+    query_response:run_context_ast_jsonld_response(Context2, AST2, Result),
+    get_dict(bindings,Result,Bindings),
+    writeq(Bindings),
+    % test that we aren't going in circles
+    length(Bindings, 4).
+
 :- end_tests(path).
