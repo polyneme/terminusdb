@@ -253,4 +253,70 @@ test(n_m_loop, [
     % test that we aren't going in circles
     length(Bindings, 4).
 
+test(commit_graph, [
+         setup((setup_temp_store(State),
+                create_db_without_schema("admin", "test"))),
+         cleanup(teardown_temp_store(State))
+     ]) :-
+
+    Commit_Info = commit_info{ author : "automated test framework",
+                               message : "testing"},
+
+    AST1 = insert(a,b,c),
+
+    resolve_absolute_string_descriptor("admin/test", Descriptor),
+    create_context(Descriptor,Commit_Info, Context1),
+    query_response:run_context_ast_jsonld_response(Context1, AST1, _),
+
+    AST2 = insert(c,d,e),
+
+    create_context(Descriptor,Commit_Info, Context2),
+    query_response:run_context_ast_jsonld_response(Context2, AST2, _),
+
+
+    AST3 = insert(c,d,f),
+
+    create_context(Descriptor,Commit_Info, Context3),
+    query_response:run_context_ast_jsonld_response(Context3, AST3, _),
+
+
+    AST4 = using("admin/test/local/_commits",
+                 (   t(v(branch), rdf:type, ref:'Branch'),
+                     t(v(branch), ref:ref_commit, v(commits)),
+                     path(v(commits), star(p(ref:commit_parent)), v(target), v(path)))),
+
+    create_context(Descriptor,Commit_Info, Context4),
+    query_response:run_context_ast_jsonld_response(Context4, AST4, Result),
+    get_dict(bindings,Result,Bindings),
+    % test that we aren't going in circles
+    length(Bindings, 3).
+
+
+test(star, [
+         setup((setup_temp_store(State),
+                create_db_without_schema("admin", "test"))),
+         cleanup(teardown_temp_store(State))
+     ]) :-
+
+    Commit_Info = commit_info{ author : "automated test framework",
+                               message : "testing"},
+
+    AST = (insert(a,b,c),
+           insert(c,b,e),
+           insert(e,b,g),
+           insert(g,b,a)),
+
+    resolve_absolute_string_descriptor("admin/test", Descriptor),
+    create_context(Descriptor,Commit_Info, Context),
+    query_response:run_context_ast_jsonld_response(Context, AST, _),
+
+    AST2 = path(a, star(p(b)), v(x), v(p)),
+
+    create_context(Descriptor,Commit_Info, Context2),
+    query_response:run_context_ast_jsonld_response(Context2, AST2, Result),
+    get_dict(bindings,Result,Bindings),
+    length(Bindings, 5).
+
+
+
 :- end_tests(path).
