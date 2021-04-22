@@ -387,7 +387,10 @@ storage_literal(X1^^T1,X3^^T2) :-
     storage_value(X1,X2),
     (   is_number_type(T2)
     ->  (   string(X2)
-        ->  number_string(X3,X2)
+        ->  do_or_die(
+                number_string(X3,X2),
+                error(not_a_valid_number_in_database_storage(X2),_)
+            )
         ;   X2 = X3)
     % NOTE: This is considered special because the anyURI condition
     % used to be less strict.
@@ -485,3 +488,55 @@ test(double, []) :-
     literal_to_turtle(33.4^^'http://www.w3.org/2001/XMLSchema#double', literal(type('http://www.w3.org/2001/XMLSchema#double','33.4'))).
 
 :- end_tests(turtle_literal_marshalling).
+
+:- begin_tests(marshall_bad_data).
+:- use_module(core(util/test_utils)).
+:- use_module(core(query)).
+:- use_module(core(transaction)).
+:- use_module(library(terminus_store)).
+
+test(bad_number_data, [setup((setup_temp_store(State),
+                           create_db_without_schema("admin","foo"))),
+                       cleanup(teardown_temp_store(State)),
+                       error(not_a_valid_number_in_database_storage("asdf fdsa"),_)]) :-
+
+    resolve_absolute_string_descriptor("admin/foo", Descriptor),
+    create_context(Descriptor, commit_info{author:"test", message:"test"}, Context),
+    [Transaction] = (Context.transaction_objects),
+    [RWO] = (Transaction.instance_objects),
+    read_write_obj_builder(RWO,Builder),
+
+    with_transaction(
+        Context,
+        (   nb_add_triple(Builder, "a", "b",
+                          value("\"asdf fdsa\"^^'http://www.w3.org/2001/XMLSchema#double'"))
+        ),
+        _Meta_Data
+    ),
+
+    once(
+        ask(Descriptor, (t(a,b,_)))).
+
+
+test(bad_url_data, [setup((setup_temp_store(State),
+                           create_db_without_schema("admin","foo"))),
+                    cleanup(teardown_temp_store(State))]) :-
+
+    resolve_absolute_string_descriptor("admin/foo", Descriptor),
+    create_context(Descriptor, commit_info{author:"test", message:"test"}, Context),
+    [Transaction] = (Context.transaction_objects),
+    [RWO] = (Transaction.instance_objects),
+    read_write_obj_builder(RWO,Builder),
+
+    with_transaction(
+        Context,
+        (   nb_add_triple(Builder, "a", "b",
+                          value("\"asdf fdsa\"^^'http://www.w3.org/2001/XMLSchema#anyURI'"))
+        ),
+        _Meta_Data
+    ),
+
+    once(
+        ask(Descriptor, (t(a,b,"asdf fdsa"^^xsd:anyURI)))).
+
+:- end_tests(marshall_bad_data).
